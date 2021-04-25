@@ -1,3 +1,4 @@
+import glob
 import queue
 import struct
 import sys
@@ -25,7 +26,15 @@ left = client.outports.register('left')
 right = client.outports.register('right')
 
 
-def play_file(path, buffersize=20, blocksize=1024):
+def play_file(bank, pitch, buffersize=20, blocksize=1024):
+    try:
+        path = glob.glob(f'samples/{bank}_{pitch}_*')[0]
+    except IndexError:
+        print(f'Sample missing: bank={bank} pitch={pitch}')
+        return False
+    else:
+        print(f'Playing: path={path}')
+
     with sf.SoundFile(path) as f:
         blocks = f.blocks(blocksize=blocksize, dtype='float32',
                           always_2d=True, fill_value=0)
@@ -35,26 +44,13 @@ def play_file(path, buffersize=20, blocksize=1024):
             q_out.put(data)
 
 
-paths = {
-    0: {
-        60: 'samples/tetris.ogg',
-    }
-}
-
 def handle_midi_input():
     while True:
         data = q_in.get()
         status, bank, pitch, velocity = extract_midi_data(data)
-        print('status={:x} bank={:x} pitch={} velocity={}'.format(
-            status, bank, pitch, velocity
-        ))
-        if status != NOTE_ON:
-            continue
-        try:
-            path = paths[bank][pitch]
-            play_file(path)
-        except KeyError:
-            continue
+        print(f'Event: status={status} bank={bank} pitch={pitch} velocity={velocity}')
+        if status == NOTE_ON:
+            play_file(bank, pitch)
 
 
 handle_midi_input = threading.Thread(target=handle_midi_input, name='midi_in', daemon=True)
